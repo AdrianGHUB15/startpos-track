@@ -1,0 +1,408 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#090f1d">
+  <meta name="description" content="Startpos Track compares Stockfish evaluations for every legal first move from the starting position.">
+  <title>Startpos Track</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #090f1d;
+      --panel: #111b2d;
+      --panel-2: #0d1728;
+      --line: #263650;
+      --muted: #91a2bd;
+      --text: #edf3ff;
+      --blue: #67a8ff;
+      --green: #54d6a0;
+      --red: #ff8585;
+      --radius: 16px;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: radial-gradient(ellipse at 50% -20%, #19345b 0%, transparent 48%), var(--bg);
+      color: var(--text);
+      font: 15px/1.5 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    button, input { font: inherit; }
+    .shell { width: min(1240px, calc(100% - 36px)); margin: 0 auto; padding: 34px 0 60px; }
+    header { display: flex; justify-content: space-between; align-items: center; gap: 20px; margin-bottom: 30px; }
+    .brand { display: flex; align-items: center; gap: 12px; }
+    .logo { width: 42px; height: 42px; display: grid; place-items: center; border-radius: 13px; background: linear-gradient(145deg, #3d8cff, #2452a0); box-shadow: 0 8px 28px #1d5bb755; font-size: 22px; }
+    .brand-name { font-size: 19px; font-weight: 760; letter-spacing: -.5px; }
+    .brand-sub { color: var(--muted); font-size: 12px; margin-top: 1px; }
+    .header-actions { display: flex; align-items: center; gap: 10px; }
+    .status { display: inline-flex; align-items: center; gap: 8px; color: #b8c8df; font-size: 12px; padding: 8px 11px; border: 1px solid var(--line); border-radius: 999px; background: #0c1728aa; }
+    .status::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: #e5b45c; box-shadow: 0 0 12px #e5b45c88; }
+    .button { border: 1px solid #36527a; background: #172943; color: #eaf2ff; border-radius: 10px; padding: 9px 13px; cursor: pointer; transition: .15s ease; }
+    .button:hover { background: #203a5d; border-color: #5a86c2; }
+    .button.primary { background: #2868bd; border-color: #3f85df; }
+    .button.primary:hover { background: #347bd7; }
+    h1 { margin: 0; font-size: clamp(27px, 4vw, 39px); line-height: 1.12; letter-spacing: -1.3px; }
+    .intro { color: var(--muted); margin: 10px 0 24px; max-width: 680px; }
+    .stats { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 18px; }
+    .stat, .panel { background: linear-gradient(180deg, #121e31, #0e192a); border: 1px solid var(--line); border-radius: var(--radius); }
+    .stat { padding: 15px 17px; }
+    .stat-label { color: var(--muted); font-size: 12px; }
+    .stat-value { font-size: 21px; font-weight: 720; letter-spacing: -.4px; margin-top: 4px; }
+    .panel { padding: 20px; margin-top: 16px; }
+    .panel-heading { display: flex; justify-content: space-between; align-items: flex-start; gap: 14px; margin-bottom: 15px; }
+    h2 { margin: 0; font-size: 17px; letter-spacing: -.25px; }
+    .subheading { color: var(--muted); font-size: 12px; margin-top: 4px; }
+    .chart-wrap { height: 430px; position: relative; }
+    .chart-tools { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
+    .select, .search { color: var(--text); background: #0b1525; border: 1px solid var(--line); border-radius: 9px; padding: 8px 10px; outline: none; }
+    .select:focus, .search:focus { border-color: var(--blue); }
+    .move-filter { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+    .version-filter { display:flex; gap:7px; overflow-x:auto; padding:3px 2px 10px; margin:10px 0 2px; scrollbar-width:thin; }
+    .version-chip { flex:0 0 auto; border:1px solid var(--line); color:#bdcbe0; background:#0b1525; border-radius:9px; padding:7px 11px; font-size:12px; cursor:pointer; }
+    .version-chip.active { color:#fff; border-color:#5c8fcf; background:#1b3a60; box-shadow:inset 0 0 0 1px #5c8fcf33; }
+    .version-tools { display:flex; gap:7px; flex-wrap:wrap; margin-top:7px; }
+    .chip { border: 1px solid var(--line); color: #bdcbe0; background: #0b1525; border-radius: 999px; padding: 6px 10px; font-size: 12px; cursor: pointer; }
+    .chip.active { color: #fff; border-color: #5c8fcf; background: #1b3a60; }
+    .section-note { color: var(--muted); font-size: 12px; margin-top: 12px; }
+    .moves-head { display: flex; justify-content: space-between; gap: 12px; align-items: center; margin-bottom: 14px; }
+    .move-list { display: grid; gap: 9px; }
+    .hardware-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; }
+    .hardware-item { background:#0c1728; border:1px solid var(--line); border-radius:11px; padding:13px 14px; }
+    .hardware-value { font-size:16px; font-weight:720; margin-top:4px; }
+    .version-picker { min-width:145px; }
+    .move-rank { color:var(--muted); font-size:11px; min-width:24px; }
+    .version-info-title { color:#dce9ff; font-weight:700; margin:12px 0 8px; }
+    details.move-card { border: 1px solid var(--line); background: #0c1728; border-radius: 12px; overflow: hidden; }
+    details.move-card[open] { border-color: #3d5d86; }
+    summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 12px; padding: 13px 15px; }
+    summary::-webkit-details-marker { display: none; }
+    .move-name { font-weight: 720; min-width: 54px; }
+    .move-score { color: var(--green); font-weight: 700; font-variant-numeric: tabular-nums; }
+    .move-meta { color: var(--muted); font-size: 12px; }
+    .summary-spacer { flex: 1; }
+    .chevron { color: var(--muted); transition: transform .15s ease; }
+    details[open] .chevron { transform: rotate(180deg); }
+    .info-body { border-top: 1px solid var(--line); padding: 14px 15px 16px; }
+    .info-grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 9px; margin-bottom: 13px; }
+    .info-cell { background: #111f34; border: 1px solid #20314b; border-radius: 9px; padding: 9px 10px; min-width: 0; }
+    .info-label { color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: .6px; }
+    .info-value { margin-top: 3px; font-weight: 650; font-size: 13px; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+    .pv-label { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .6px; margin-bottom: 6px; }
+    .pv { color: #dce9ff; background: #08111f; border: 1px solid #1e2e47; border-radius: 9px; padding: 11px 12px; font: 12px/1.8 ui-monospace, SFMono-Regular, Consolas, monospace; overflow-wrap: anywhere; }
+    .raw-info { margin-top: 10px; color: #9fb1cb; font: 11px/1.6 ui-monospace, SFMono-Regular, Consolas, monospace; overflow-wrap: anywhere; }
+    .empty { padding: 30px 18px; border: 1px dashed #344966; border-radius: 12px; color: var(--muted); text-align: center; }
+    .empty strong { display: block; color: #dce8fa; margin-bottom: 5px; }
+    .footer { color: #71839e; font-size: 11px; text-align: center; margin-top: 22px; }
+    .hidden { display: none !important; }
+    @media (max-width: 760px) {
+      .shell { width: min(100% - 24px, 1240px); padding-top: 22px; }
+      header { align-items: flex-start; }
+      .status { display: none; }
+      .stats { grid-template-columns: repeat(2, 1fr); }
+      .panel { padding: 15px; }
+      .panel-heading { flex-direction: column; }
+      .chart-wrap { height: 340px; }
+      .info-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      .hardware-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+      .moves-head { align-items: flex-start; flex-direction: column; }
+    }
+    @media (max-width: 420px) {
+      .brand-sub { display: none; }
+      .button { padding: 8px 10px; font-size: 12px; }
+      .info-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header>
+      <div class="brand">
+        <div class="logo">♟</div>
+        <div><div class="brand-name">Startpos Track</div><div class="brand-sub">Stockfish opening-move evaluation tracker</div></div>
+      </div>
+      <div class="header-actions">
+        <span class="status" id="dataStatus">Demo data</span>
+        <button class="button" id="importButton">Import JSON</button>
+        <input id="fileInput" type="file" accept=".json,application/json" hidden>
+      </div>
+    </header>
+
+    <section>
+      <h1>Starting Position Evaluation Map</h1>
+      <p class="intro">Compare how different Stockfish versions evaluate every legal first move from the starting position. Select a move to follow its evaluation across versions, then expand it to inspect the engine's UCI search information.</p>
+      <div class="stats">
+        <div class="stat"><div class="stat-label">Engine versions</div><div class="stat-value" id="versionCount">3</div></div>
+        <div class="stat"><div class="stat-label">First moves</div><div class="stat-value" id="moveCount">20</div></div>
+        <div class="stat"><div class="stat-label">Node budget / move</div><div class="stat-value">100B</div></div>
+        <div class="stat"><div class="stat-label">Concurrency</div><div class="stat-value">10</div></div>
+        <div class="stat"><div class="stat-label">Latest version</div><div class="stat-value" id="latestVersion">SF19</div></div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-heading">
+        <div><h2>Hardware &amp; tablebase configuration</h2><div class="subheading">Search configuration used for the comparisons</div></div>
+      </div>
+      <div class="hardware-grid">
+        <div class="hardware-item"><div class="info-label">CPU</div><div class="hardware-value">Intel Core i5-12500T</div><div class="subheading">6 cores · 12th Gen · 2.0 GHz base</div></div>
+        <div class="hardware-item"><div class="info-label">Concurrency</div><div class="hardware-value">10 simultaneous searches</div></div>
+        <div class="hardware-item"><div class="info-label">Hash</div><div class="hardware-value">1024 MB</div></div>
+        <div class="hardware-item"><div class="info-label">Syzygy tablebases</div><div class="hardware-value">6-man</div></div>
+        <div class="hardware-item"><div class="info-label">Tablebase probes</div><div class="hardware-value">DTZ + WDL · SF6 and newer</div></div>
+      </div>
+      <div class="section-note">10 concurrent engine searches · 100 billion nodes per move where supported. SF3–SF5 are shown without tablebase probe data.</div>
+      <div class="section-note" style="padding:12px 14px;border:1px solid #765d32;background:#2a2114;border-radius:10px;color:#f0d49b"><strong>Node-limit compatibility:</strong> Some Stockfish versions use a 32-bit (<code>int32_t</code>) node counter or node limit. Those versions are limited to approximately 2.1 billion nodes, rather than the intended 100 billion nodes. This currently applies to versions SF3–TBD (upper version not yet confirmed). Their results should be treated as a 2B-node run, not directly as a 100B-node run.</div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-heading">
+        <div><h2>Evaluation by Stockfish version</h2><div class="subheading">Each line represents one legal first move · evaluations shown from White's perspective</div></div>
+        <div class="chart-tools">
+          <button class="button" id="showAll">Show all moves</button>
+          <button class="button" id="clearAll">Clear moves</button>
+        </div>
+      </div>
+      <div class="chart-wrap"><canvas id="evaluationChart" aria-label="Line chart of evaluations by Stockfish version"></canvas></div>
+      <div class="subheading">Stockfish versions · select which versions appear on the chart</div>
+      <div class="version-filter" id="versionFilters" aria-label="Stockfish version filters"></div>
+      <div class="version-tools"><button class="button" id="showAllVersions">Show all versions</button><button class="button" id="clearVersions">Clear versions</button></div>
+      <div class="move-filter" id="moveFilters"></div>
+    </section>
+
+    <section class="panel">
+      <div class="moves-head">
+        <div><h2>Move search information</h2><div class="subheading">Moves are ranked best to worst for the selected version. Expand a move to inspect that version's saved UCI info.</div></div>
+        <div class="chart-tools">
+          <select class="select version-picker" id="infoVersion" aria-label="Info Stockfish version"></select>
+          <input class="search" id="moveSearch" type="search" placeholder="Filter moves…" aria-label="Filter moves">
+        </div>
+      </div>
+      <div class="move-list" id="moveList"></div>
+    </section>
+    <div class="footer">Startpos Track · Static GitHub Pages site · Import your measured results using JSON.</div>
+  </main>
+
+  <script>
+    // Import data as: { versions:[...], moves:[{move:"e2e4", evaluations:{SF3:20}, info:{SF3:"info depth ... tbhits ... pv ..."}}] }. Keep one info line per move per SF version.
+    const versionList = ["SF3","SF4","SF4.5DD","SF5","SF6","SF7","SF8","SF9","SF10","SF11","SF12","SF13","SF14","SF14.1","SF15","SF15.1","SF16","SF16.1","SF17","SF17.1","SF18","SF19"];
+    const baseMoves = [
+      ["a2a3",8],["a2a4",12],["b2b3",18],["b2b4",10],["c2c3",16],["c2c4",24],["d2d3",22],["d2d4",28],
+      ["e2e3",20],["e2e4",32],["f2f3",-8],["f2f4",5],["g2g3",19],["g2g4",-5],["h2h3",9],["h2h4",11],
+      ["b1a3",4],["b1c3",25],["g1f3",27],["g1h3",3]
+    ];
+    const demoData = {
+      versions: versionList,
+      moves: baseMoves.map(([move, base], i) => {
+        const evaluations = {};
+        versionList.forEach((version, vi) => { evaluations[version] = base + Math.round(Math.sin((i + 2) * (vi + 1) * .37) * 3); });
+        return { move, evaluations, info: {} };
+      })
+    };
+    demoData.moves.find(m => m.move === "e2e4").info.SF3 = "info depth 15 seldepth 39 score cp 210 nodes 260694 nps 380020 hashfull 422 tbhits 0 time 686 pv e7e5 d5e6 f7e6 e1g1 d7a4 c3a4 a7a5 a1e1 d8d7 a2a3 b4c6 d2d5 c6d8 f3d4 e8g8 d4e6 d8e6 d5e6 d7e6 e1e6";
+    let data = demoData;
+    let chart;
+    const visibleMoves = new Set(data.moves.map(m => m.move));
+    const visibleVersions = new Set(data.versions);
+    const palette = ["#69aaff", "#55d6a5", "#ff9b70", "#c49aff", "#f4cf63", "#55d7df", "#ff7fa8", "#a7d46f", "#9bafff", "#e7a4ff", "#d9a36b", "#83c9ff", "#f18b8b", "#86dfc0", "#c6a7ff", "#d3d879", "#75a5d9", "#e8a0c6", "#8dd4e8", "#c2cbd8"];
+    const $ = id => document.getElementById(id);
+
+    function parseInfo(raw) {
+      if (!raw) return {};
+      const tokens = raw.trim().split(/\s+/);
+      const result = {};
+      const keys = ["depth", "seldepth", "score", "nodes", "nps", "hashfull", "tbhits", "time", "pv"];
+      for (let i = 0; i < tokens.length; i++) {
+        if (keys.includes(tokens[i])) {
+          const key = tokens[i];
+          if (key === "score") { result.scoreType = tokens[i + 1]; result.score = tokens[i + 2]; i += 2; }
+          else if (key === "pv") { result.pv = tokens.slice(i + 1).join(" "); break; }
+          else { result[key] = tokens[i + 1]; i++; }
+        }
+      }
+      return result;
+    }
+    function formatScore(value) {
+      if (value === undefined || value === null || value === "") return "—";
+      const n = Number(value);
+      return Number.isFinite(n) ? `${n > 0 ? "+" : ""}${(n / 100).toFixed(2)}` : String(value);
+    }
+    function scoreLabel(move, version) {
+      const v = move.evaluations?.[version];
+      return v === undefined || v === null ? "—" : formatScore(v);
+    }
+    function buildChart() {
+      // Create the chart only once. Rebuilding/destroying it on every version
+      // toggle makes the whole plot flash/reset and loses its current state.
+      if (chart) {
+        chart.data.labels = data.versions.filter(version => visibleVersions.has(version));
+        chart.data.datasets.forEach(dataset => {
+          const move = data.moves.find(item => item.move === dataset.label);
+          dataset.data = chart.data.labels.map(version => move?.evaluations?.[version] ?? null);
+          dataset.hidden = !visibleMoves.has(dataset.label);
+        });
+        chart.update();
+        return;
+      }
+      const ctx = $("evaluationChart").getContext("2d");
+      chart = new Chart(ctx, {
+        type: "line",
+        data: {
+          labels: data.versions.filter(version => visibleVersions.has(version)),
+          datasets: data.moves.map((move, i) => ({
+            label: move.move,
+            data: data.versions.filter(version => visibleVersions.has(version)).map(version => move.evaluations?.[version] ?? null),
+            borderColor: palette[i % palette.length],
+            backgroundColor: palette[i % palette.length],
+            pointRadius: 4,
+            pointHoverRadius: 7,
+            borderWidth: 2,
+            tension: 0.25,
+            // Connect the remaining visible versions directly, even when intermediate versions are hidden.
+            spanGaps: true,
+            hidden: !visibleMoves.has(move.move)
+          }))
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          interaction: { mode: "nearest", intersect: false },
+          plugins: {
+            legend: { display: false },
+            tooltip: { backgroundColor: "#101c2e", borderColor: "#344966", borderWidth: 1, titleColor: "#fff", bodyColor: "#dce8fa", padding: 11,
+              callbacks: { label: context => `${context.dataset.label}: ${formatScore(context.parsed.y)} (${context.parsed.y} cp)` } }
+          },
+          scales: {
+            x: { title: { display: true, text: "Stockfish version", color: "#91a2bd" }, ticks: { color: "#aebed4" }, grid: { color: "#263650" } },
+            y: { title: { display: true, text: "Evaluation (pawns, White's perspective)", color: "#91a2bd" }, ticks: { color: "#aebed4", callback: value => (value / 100).toFixed(1) }, grid: { color: "#263650" } }
+          }
+        }
+      });
+    }
+    function renderVersionFilters() {
+      const container = $("versionFilters");
+      container.innerHTML = "";
+      data.versions.forEach(version => {
+        const button = document.createElement("button");
+        button.className = `version-chip ${visibleVersions.has(version) ? "active" : ""}`;
+        button.textContent = version;
+        button.setAttribute("aria-pressed", visibleVersions.has(version) ? "true" : "false");
+        button.addEventListener("click", () => {
+          if (visibleVersions.has(version)) visibleVersions.delete(version);
+          else visibleVersions.add(version);
+          button.classList.toggle("active", visibleVersions.has(version));
+          button.setAttribute("aria-pressed", visibleVersions.has(version) ? "true" : "false");
+          updateVersionVisibility();
+        });
+        container.appendChild(button);
+      });
+    }
+    function updateVersionVisibility() {
+      // Update the existing Chart.js instance in place: remaining versions close
+      // together on the x-axis and each move's line connects across the filtered set.
+      buildChart();
+      // Keep the current info version unless it was hidden. If it was hidden,
+      // fall back to the earliest visible version (SF3 when available).
+      const infoSelect = $("infoVersion");
+      if (!visibleVersions.has(infoSelect.value)) {
+        const nextVersion = data.versions.find(version => visibleVersions.has(version));
+        if (nextVersion) infoSelect.value = nextVersion;
+        renderMoveList();
+      }
+    }
+    function renderFilters() {
+      $("moveFilters").innerHTML = "";
+      data.moves.forEach((move, i) => {
+        const button = document.createElement("button");
+        button.className = `chip ${visibleMoves.has(move.move) ? "active" : ""}`;
+        button.textContent = move.move;
+        button.style.setProperty("--chip-color", palette[i % palette.length]);
+        button.addEventListener("click", () => {
+          visibleMoves.has(move.move) ? visibleMoves.delete(move.move) : visibleMoves.add(move.move);
+          button.classList.toggle("active", visibleMoves.has(move.move));
+          if (chart) { const index = data.moves.findIndex(m => m.move === move.move); chart.setDatasetVisibility(index, visibleMoves.has(move.move)); chart.update(); }
+        });
+        $("moveFilters").appendChild(button);
+      });
+    }
+    function infoCell(label, value) {
+      const cell = document.createElement("div"); cell.className = "info-cell";
+      const l = document.createElement("div"); l.className = "info-label"; l.textContent = label;
+      const v = document.createElement("div"); v.className = "info-value"; v.textContent = value ?? "—";
+      cell.append(l, v); return cell;
+    }
+    function renderMoveList() {
+      const list = $("moveList"); list.innerHTML = "";
+      const query = $("moveSearch").value.trim().toLowerCase();
+      const selectedVersion = $("infoVersion").value || data.versions[0];
+      const moves = data.moves.filter(m => m.move.toLowerCase().includes(query)).sort((a,b) => {
+        const av = a.evaluations?.[selectedVersion], bv = b.evaluations?.[selectedVersion];
+        if (av == null && bv == null) return a.move.localeCompare(b.move);
+        if (av == null) return 1; if (bv == null) return -1;
+        return Number(bv) - Number(av);
+      });
+      if (!moves.length) { list.innerHTML = '<div class="empty">No matching moves.</div>'; return; }
+      moves.forEach((move, index) => {
+        const details = document.createElement("details"); details.className = "move-card";
+        const summary = document.createElement("summary");
+        const rank = document.createElement("span"); rank.className = "move-rank"; rank.textContent = `#${index + 1}`;
+        const name = document.createElement("span"); name.className = "move-name"; name.textContent = move.move;
+        const score = document.createElement("span"); score.className = "move-score"; score.textContent = scoreLabel(move, selectedVersion);
+        const meta = document.createElement("span"); meta.className = "move-meta"; meta.textContent = `${selectedVersion} · evaluation`;
+        const spacer = document.createElement("span"); spacer.className = "summary-spacer";
+        const chev = document.createElement("span"); chev.className = "chevron"; chev.textContent = "⌄";
+        summary.append(rank, name, score, meta, spacer, chev);
+        const body = document.createElement("div"); body.className = "info-body";
+        const versionTitle = document.createElement("div"); versionTitle.className = "version-info-title"; versionTitle.textContent = `${selectedVersion} · UCI search information`;
+        const raw = move.info?.[selectedVersion] || "";
+        const parsed = parseInfo(raw);
+        const grid = document.createElement("div"); grid.className = "info-grid";
+        grid.append(
+          infoCell("Depth", parsed.depth), infoCell("SelDepth", parsed.seldepth),
+          infoCell("Score", parsed.scoreType && parsed.score !== undefined ? `${parsed.scoreType} ${parsed.score}` : "—"),
+          infoCell("Nodes", parsed.nodes), infoCell("NPS", parsed.nps),
+          infoCell("Hashfull", parsed.hashfull), infoCell("TB hits", parsed.tbhits), infoCell("Time (ms)", parsed.time)
+        );
+        const pvLabel = document.createElement("div"); pvLabel.className = "pv-label"; pvLabel.textContent = `Principal variation · ${selectedVersion}`;
+        const pv = document.createElement("div"); pv.className = "pv"; pv.textContent = parsed.pv || "No PV info saved for this move and version yet.";
+        body.append(versionTitle, grid, pvLabel, pv);
+        if (raw) { const rawLine = document.createElement("div"); rawLine.className = "raw-info"; rawLine.textContent = raw; body.appendChild(rawLine); }
+        else { const note = document.createElement("div"); note.className = "section-note"; note.textContent = "No UCI info line has been imported for this move/version yet."; body.appendChild(note); }
+        details.append(summary, body); list.appendChild(details);
+      });
+    }
+    function refresh() {
+      $("versionCount").textContent = data.versions.length;
+      $("moveCount").textContent = data.moves.length;
+      $("latestVersion").textContent = data.versions.at(-1) || "—";
+      const infoSelect = $("infoVersion"); const previous = infoSelect.value;
+      for (const version of [...visibleVersions]) if (!data.versions.includes(version)) visibleVersions.delete(version);
+      data.versions.forEach(version => visibleVersions.add(version));
+      infoSelect.innerHTML = "";
+      data.versions.forEach(version => { const option = document.createElement("option"); option.value = version; option.textContent = version; infoSelect.appendChild(option); });
+      infoSelect.value = data.versions.includes(previous) ? previous : (data.versions.includes("SF3") ? "SF3" : data.versions[0]);
+      buildChart(); renderVersionFilters(); renderFilters(); renderMoveList();
+    }
+    $("showAll").addEventListener("click", () => { data.moves.forEach(m => visibleMoves.add(m.move)); renderFilters(); chart.data.datasets.forEach((_, i) => chart.setDatasetVisibility(i, true)); chart.update(); });
+    $("clearAll").addEventListener("click", () => { visibleMoves.clear(); renderFilters(); chart.data.datasets.forEach((_, i) => chart.setDatasetVisibility(i, false)); chart.update(); });
+    $("showAllVersions").addEventListener("click", () => { data.versions.forEach(v => visibleVersions.add(v)); renderVersionFilters(); updateVersionVisibility(); });
+    $("clearVersions").addEventListener("click", () => { visibleVersions.clear(); renderVersionFilters(); updateVersionVisibility(); });
+    $("moveSearch").addEventListener("input", renderMoveList);
+    $("infoVersion").addEventListener("change", renderMoveList);
+    $("importButton").addEventListener("click", () => $("fileInput").click());
+    $("fileInput").addEventListener("change", async event => {
+      const file = event.target.files?.[0]; if (!file) return;
+      try {
+        const imported = JSON.parse(await file.text());
+        if (!Array.isArray(imported.versions) || !Array.isArray(imported.moves)) throw new Error("JSON must contain versions[] and moves[].");
+        data = imported;
+        visibleMoves.clear(); data.moves.forEach(m => visibleMoves.add(m.move));
+        $("dataStatus").textContent = "Imported data";
+        refresh();
+      } catch (error) { alert(`Could not import data: ${error.message}`); }
+      event.target.value = "";
+    });
+    refresh();
+  </script>
+</body>
+</html>
